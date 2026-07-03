@@ -1,0 +1,11 @@
+flask
+pandas
+numpy
+scikit-learn
+openpyxl
+pdfplumber
+sentence-transformers
+faiss-cpu
+transformers
+torch
+xgboost
