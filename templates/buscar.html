@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Búsqueda semántica — Bases técnicas e Itemizado</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: Arial, sans-serif; margin: 0; padding: 1.5rem; background: #f5f7fa; color: #333; }
+    h1 { font-size: 1.4rem; margin-bottom: 0.25rem; }
+    .subtitle { color: #666; font-size: 0.9rem; margin-bottom: 1.5rem; }
+    .card { background: #fff; border-radius: 8px; padding: 1.25rem; box-shadow: 0 1px 4px rgba(0,0,0,0.1); margin-bottom: 1.25rem; }
+    .form-row { display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap; }
+    input[type=text] { flex: 1; min-width: 240px; padding: 0.55rem 0.75rem; border: 1px solid #ccc; border-radius: 5px; font-size: 1rem; }
+    select { padding: 0.55rem 0.75rem; border: 1px solid #ccc; border-radius: 5px; font-size: 0.9rem; }
+    button { padding: 0.55rem 1.2rem; background: #2563eb; color: #fff; border: none; border-radius: 5px; font-size: 1rem; cursor: pointer; }
+    button:hover { background: #1d4ed8; }
+    .nav { margin-bottom: 1rem; font-size: 0.85rem; }
+    .nav a { color: #2563eb; text-decoration: none; margin-right: 1rem; }
+    .nav a:hover { text-decoration: underline; }
+    .hit { border-left: 4px solid #2563eb; background: #fff; border-radius: 6px; padding: 0.85rem 1rem; margin-bottom: 0.9rem; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+    .hit.itemizado { border-left-color: #16a34a; }
+    .hit.bases_administrativas { border-left-color: #d97706; }
+    .hit-meta { font-size: 0.78rem; color: #666; margin-bottom: 0.4rem; }
+    .badge { display: inline-block; font-size: 0.72rem; padding: 0.15rem 0.55rem; border-radius: 10px; background: #e0f2fe; color: #0369a1; font-weight: bold; margin-right: 0.4rem; }
+    .badge.itemizado { background: #dcfce7; color: #15803d; }
+    .badge.bases_administrativas { background: #fef3c7; color: #92400e; }
+    .score { color: #999; }
+    .hit-text { font-size: 0.92rem; line-height: 1.4; }
+    .related { margin-top: 0.6rem; padding-left: 0.9rem; border-left: 2px dashed #cbd5e1; }
+    .related-item { font-size: 0.85rem; color: #444; margin-bottom: 0.4rem; }
+    .related-label { font-size: 0.72rem; text-transform: uppercase; color: #2563eb; font-weight: bold; margin-bottom: 0.3rem; }
+    .empty { color: #888; font-size: 0.9rem; }
+  </style>
+</head>
+<body>
+
+  <div class="nav">
+    <a href="/">← Formulario de predicción</a>
+    <a href="/omnitab">Consulta OmniTab del itemizado →</a>
+  </div>
+
+  <h1>Búsqueda semántica (FAISS + SBERT)</h1>
+  <p class="subtitle">Busca en bases técnicas, bases administrativas e itemizados. Los ítems del itemizado muestran sus cláusulas técnicas relacionadas.</p>
+
+  <div class="card">
+    <form method="post" action="/buscar">
+      <div class="form-row">
+        <input type="text" name="question" placeholder="Ej: pavimento de hormigón en veredas"
+               value="{{ question | e }}" autocomplete="off" />
+        <select name="licitacion">
+          <option value="" {% if not licitacion %}selected{% endif %}>Todas las licitaciones</option>
+          {% for lic in licitaciones %}
+          <option value="{{ lic }}" {% if lic == licitacion %}selected{% endif %}>{{ lic }}</option>
+          {% endfor %}
+        </select>
+        <button type="submit">Buscar</button>
+      </div>
+    </form>
+  </div>
+
+  {% if question and not results %}
+  <p class="empty">Sin resultados para "{{ question }}".</p>
+  {% endif %}
+
+  {% for hit in results %}
+  <div class="hit {{ hit.doc_type }}">
+    <div class="hit-meta">
+      <span class="badge {{ hit.doc_type }}">
+        {% if hit.doc_type == 'bases_tecnicas' %}Bases técnicas
+        {% elif hit.doc_type == 'bases_administrativas' %}Bases administrativas
+        {% elif hit.doc_type == 'itemizado' %}Itemizado
+        {% else %}{{ hit.doc_type }}{% endif %}
+      </span>
+      {{ hit.licitacion }} · {{ hit.file }}
+      {% if hit.page %} · pág. {{ hit.page }}{% endif %}
+      · <span class="score">similitud {{ '%.3f'|format(hit.score) }}</span>
+    </div>
+    <div class="hit-text">{{ hit.text }}</div>
+
+    {% if hit.related_bases_tecnicas %}
+    <div class="related">
+      <div class="related-label">Cláusulas técnicas relacionadas</div>
+      {% for rel in hit.related_bases_tecnicas %}
+      <div class="related-item">
+        <span class="score">[{{ '%.3f'|format(rel.score) }}]</span>
+        {{ rel.file }}{% if rel.page %} (pág. {{ rel.page }}){% endif %}: {{ rel.text }}
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+  {% endfor %}
+
+</body>
+</html>

@@ -1,0 +1,527 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Valorización Masiva — Motor de Precios</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: Arial, sans-serif; margin: 0; padding: 1.5rem; background: #f5f7fa; color: #333; font-size: 0.92rem; }
+    h1 { font-size: 1.35rem; margin-bottom: 0.2rem; }
+    .subtitle { color: #666; font-size: 0.87rem; margin-bottom: 1.4rem; }
+    .nav { margin-bottom: 1rem; font-size: 0.83rem; }
+    .nav a { color: #2563eb; text-decoration: none; margin-right: 1rem; }
+    .nav a:hover { text-decoration: underline; }
+    .card { background: #fff; border-radius: 8px; padding: 1.25rem 1.5rem; box-shadow: 0 1px 4px rgba(0,0,0,0.1); margin-bottom: 1.25rem; }
+
+    /* Formulario */
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    @media (max-width: 640px) { .form-grid { grid-template-columns: 1fr; } }
+    label { display: block; font-size: 0.82rem; font-weight: bold; color: #444; margin-bottom: 0.3rem; }
+    .file-wrap { border: 2px dashed #cbd5e1; border-radius: 6px; padding: 0.9rem 1rem;
+                 background: #f8fafc; transition: border-color 0.2s; }
+    .file-wrap:hover { border-color: #7c3aed; }
+    input[type=file] { width: 100%; font-size: 0.88rem; }
+    select { width: 100%; padding: 0.55rem 0.7rem; border: 1px solid #ccc; border-radius: 5px; font-size: 0.9rem; }
+    .form-footer { display: flex; align-items: center; gap: 1rem; margin-top: 1rem; flex-wrap: wrap; }
+    button[type=submit] {
+      padding: 0.65rem 1.6rem; background: #7c3aed; color: #fff;
+      border: none; border-radius: 6px; font-size: 0.95rem; font-weight: bold; cursor: pointer;
+    }
+    button[type=submit]:hover { background: #6d28d9; }
+    .hint { font-size: 0.78rem; color: #888; }
+
+    /* Alert */
+    .alert { background: #fef2f2; border: 1px solid #fecaca; border-radius: 6px;
+             padding: 0.8rem 1rem; color: #991b1b; font-size: 0.88rem; margin-bottom: 1rem; }
+
+    /* Banner IPC */
+    .ipc-banner {
+      display: flex; align-items: center; gap: 1.2rem; flex-wrap: wrap;
+      background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 7px;
+      padding: 0.65rem 1rem; margin-bottom: 1rem; font-size: 0.84rem;
+    }
+    .ipc-banner .lbl { color: #166534; font-weight: bold; }
+    .ipc-banner .val { color: #15803d; }
+
+    /* Banner XGBoost */
+    .xgb-banner {
+      display: flex; align-items: center; gap: 1.2rem; flex-wrap: wrap;
+      background: #fffbeb; border: 1px solid #fcd34d; border-radius: 7px;
+      padding: 0.65rem 1rem; margin-bottom: 1rem; font-size: 0.84rem;
+    }
+    .xgb-banner .lbl { color: #92400e; font-weight: bold; }
+    .xgb-banner .val { color: #b45309; }
+    .xgb-banner .cv-tag { font-size: 0.72rem; background: #fef3c7; border-radius: 4px; padding: 0.1rem 0.4rem; color: #92400e; }
+
+    /* Summary bar */
+    .summary { display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.25rem; }
+    .stat { background: #fff; border-radius: 7px; padding: 0.7rem 1.1rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.09); text-align: center; min-width: 110px; }
+    .stat-val { font-size: 1.45rem; font-weight: bold; color: #7c3aed; }
+    .stat-lbl { font-size: 0.72rem; color: #666; text-transform: uppercase; letter-spacing: 0.04em; margin-top: 0.1rem; }
+
+    /* Tabla principal */
+    .tbl-wrap { overflow-x: auto; }
+    table.main { width: 100%; border-collapse: collapse; font-size: 0.84rem; }
+    table.main th {
+      background: #f1f5f9; text-align: left; padding: 0.5rem 0.6rem;
+      border-bottom: 2px solid #e2e8f0; font-size: 0.75rem;
+      text-transform: uppercase; color: #64748b; letter-spacing: 0.04em;
+      white-space: nowrap;
+    }
+    table.main td { padding: 0.45rem 0.6rem; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+    table.main tr:hover td { background: #f8fafc; }
+    table.main tr.no-ref td { color: #94a3b8; }
+
+    .num { font-weight: bold; color: #334155; white-space: nowrap; }
+    .unit-badge { display: inline-block; font-size: 0.72rem; padding: 0.1rem 0.45rem;
+                  border-radius: 8px; background: #ede9fe; color: #5b21b6; font-weight: bold; }
+    .pu { font-weight: bold; color: #15803d; white-space: nowrap; }
+    .sigma { color: #7c3aed; white-space: nowrap; font-size: 0.82rem; }
+    .mape { font-size: 0.82rem; }
+    .good { color: #15803d; } .warn { color: #d97706; } .bad { color: #dc2626; }
+    .na { color: #94a3b8; font-size: 0.8rem; }
+    .n-refs { text-align: center; }
+
+    /* Modelo badge */
+    .modelo-badge { display: inline-block; font-size: 0.68rem; padding: 0.1rem 0.45rem;
+                    border-radius: 4px; font-weight: bold; }
+    .modelo-badge.gauss { background: #ede9fe; color: #5b21b6; }
+    .modelo-badge.xgb   { background: #fef3c7; color: #92400e; }
+
+    /* Fila expandible de referencias */
+    .toggle-btn {
+      background: none; border: none; cursor: pointer; color: #7c3aed;
+      font-size: 0.78rem; padding: 0; text-decoration: underline;
+    }
+    .refs-row { display: none; }
+    .refs-row.open { display: table-row; }
+    .refs-row td { background: #faf5ff; padding: 0.6rem 0.9rem 0.9rem 2rem; }
+    table.refs { width: 100%; border-collapse: collapse; font-size: 0.8rem; margin-top: 0.4rem; }
+    table.refs th { background: #ede9fe; padding: 0.35rem 0.55rem; font-size: 0.72rem;
+                    text-transform: uppercase; color: #5b21b6; letter-spacing: 0.04em; }
+    table.refs td { padding: 0.35rem 0.55rem; border-bottom: 1px solid #ede9fe; }
+    table.refs tr:last-child td { border-bottom: none; }
+    .score-pill { display: inline-block; font-size: 0.72rem; padding: 0.1rem 0.4rem;
+                  border-radius: 4px; background: #7c3aed; color: #fff; font-weight: bold; }
+    .ipc-pill   { display: inline-block; font-size: 0.68rem; padding: 0.1rem 0.35rem;
+                  border-radius: 4px; background: #d1fae5; color: #065f46; font-weight: bold; }
+
+    /* Filas de sección/título */
+    tr.titulo-row td { background: #f1f5f9; border-bottom: 1px solid #e2e8f0; padding: 0.4rem 0.6rem; }
+    .titulo-code { font-weight: bold; color: #475569; white-space: nowrap; font-size: 0.82rem; width: 1%; }
+    .titulo-desc { font-weight: bold; color: #1e293b; font-size: 0.88rem; letter-spacing: 0.01em; }
+
+    /* Badge exact match */
+    .exact-badge { display: inline-block; font-size: 0.68rem; padding: 0.1rem 0.4rem;
+                   border-radius: 4px; background: #dcfce7; color: #15803d;
+                   font-weight: bold; margin-left: 0.4rem; vertical-align: middle; }
+
+    /* Status badges */
+    .status-badge { display: inline-block; font-size: 0.7rem; padding: 0.12rem 0.5rem;
+                    border-radius: 4px; font-weight: bold; }
+    .status-badge.ok   { background: #dcfce7; color: #15803d; }
+    .status-badge.warn { background: #fef3c7; color: #92400e; }
+    .status-badge.err  { background: #fee2e2; color: #991b1b; }
+  </style>
+</head>
+<body>
+
+  <div class="nav">
+    <a href="/">← Inicio</a>
+    <a href="/buscar">Búsqueda semántica</a>
+  </div>
+
+  <h1>Valorización Masiva — Motor de Precios</h1>
+  <p class="subtitle">Sube el Excel del itemizado y el PDF de bases técnicas. El sistema estima el P.U. de cada ítem usando referencias históricas ajustadas por IPC.</p>
+
+  <!-- Formulario -->
+  <div class="card">
+    <form method="post" action="/valorizar" enctype="multipart/form-data">
+      <div class="form-grid">
+        <div>
+          <label for="archivo_excel">Itemizado (Excel .xlsx)</label>
+          <div class="file-wrap">
+            <input type="file" id="archivo_excel" name="archivo_excel" accept=".xlsx,.xls" required />
+          </div>
+        </div>
+        <div>
+          <label for="archivo_pdf">Bases Técnicas (PDF .pdf)</label>
+          <div class="file-wrap">
+            <input type="file" id="archivo_pdf" name="archivo_pdf" accept=".pdf" required />
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top:0.9rem;">
+        <label for="licitacion">Filtrar referencias por licitación (opcional)</label>
+        <select id="licitacion" name="licitacion" style="max-width:340px;">
+          <option value="" {% if not licitacion %}selected{% endif %}>Todas las licitaciones</option>
+          {% for lic in licitaciones %}
+          <option value="{{ lic }}" {% if lic == licitacion %}selected{% endif %}>{{ lic }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <!-- Toggle Gaussiano / XGBoost -->
+      <div style="margin-top:0.9rem; display:flex; align-items:center; gap:0.6rem; flex-wrap:wrap;">
+        <span style="font-size:0.88rem; font-weight:600; color:#374151;">Modelo:</span>
+        <div id="gauss-track"
+             onclick="toggleGauss()"
+             style="width:44px; height:24px; background:#7c3aed; border-radius:12px;
+                    position:relative; cursor:pointer; transition:background 0.2s; flex-shrink:0;">
+          <div id="gauss-thumb"
+               style="position:absolute; width:18px; height:18px; background:white;
+                      border-radius:50%; top:3px; left:23px; transition:left 0.2s;"></div>
+        </div>
+        <input type="checkbox" id="toggle-gauss" name="usar_gaussiano" value="true"
+               checked style="display:none;">
+        <span id="label-modo" style="font-size:0.85rem; color:#555;">
+          Gaussiano + XGBoost fallback
+        </span>
+      </div>
+      <script>
+        function toggleGauss() {
+          var cb    = document.getElementById('toggle-gauss');
+          var track = document.getElementById('gauss-track');
+          var thumb = document.getElementById('gauss-thumb');
+          var lbl   = document.getElementById('label-modo');
+          cb.checked = !cb.checked;
+          if (cb.checked) {
+            track.style.background = '#7c3aed';
+            thumb.style.left = '23px';
+            lbl.textContent  = 'Gaussiano + XGBoost fallback';
+            lbl.style.color  = '#555';
+          } else {
+            track.style.background = '#f59e0b';
+            thumb.style.left = '3px';
+            lbl.textContent  = 'Solo XGBoost (experimental)';
+            lbl.style.color  = '#92400e';
+          }
+        }
+      </script>
+
+      <div class="form-footer">
+        <button type="submit">Valorizar Cotización</button>
+        <span class="hint">Filtro estricto de unidad + ajuste IPC a precios actuales.</span>
+      </div>
+    </form>
+  </div>
+
+  {% if error %}
+  <div class="alert">{{ error }}</div>
+  {% endif %}
+
+  {% if resultados %}
+
+  <!-- Banner: período IPC detectado -->
+  {% if ipc_contexto %}
+  <div class="ipc-banner">
+    <span><span class="lbl">Período EETT detectado:</span>
+      <span class="val">{{ ipc_contexto.mes }}/{{ ipc_contexto.year }}</span></span>
+    <span><span class="lbl">IPC acumulado:</span>
+      <span class="val">{{ "%.2f"|format(ipc_contexto.ipc) }}</span></span>
+    <span style="color:#166534;font-size:0.8rem;">Los precios históricos han sido ajustados a este período.</span>
+  </div>
+  {% endif %}
+
+  <!-- Banner: métricas globales XGBoost (solo si está activo) -->
+  {% if xgb_activo and xgb_metricas %}
+  <div class="xgb-banner">
+    <span><span class="lbl">Modelo activo:</span>
+      <span class="val">XGBoost</span>
+      <span class="cv-tag">{{ xgb_cv_tipo }}</span></span>
+    {% if xgb_metricas.mape_pct is not none %}
+    <span><span class="lbl">MAPE:</span>
+      <span class="val {% if xgb_metricas.mape_pct < 15 %}good{% elif xgb_metricas.mape_pct < 35 %}warn{% else %}bad{% endif %}">
+        {{ "%.1f"|format(xgb_metricas.mape_pct) }}%
+      </span></span>
+    {% endif %}
+    {% if xgb_metricas.r2 is not none %}
+    <span><span class="lbl">R²:</span>
+      <span class="val {% if xgb_metricas.r2 >= 0.8 %}good{% elif xgb_metricas.r2 >= 0.5 %}warn{% else %}bad{% endif %}">
+        {{ "%.3f"|format(xgb_metricas.r2) }}
+      </span></span>
+    {% endif %}
+    {% if xgb_metricas.mae is not none %}
+    <span><span class="lbl">MAE:</span>
+      <span class="val">${{ "{:,.0f}".format(xgb_metricas.mae) }}</span></span>
+    {% endif %}
+    {% if xgb_metricas.rmse is not none %}
+    <span><span class="lbl">RMSE:</span>
+      <span class="val">${{ "{:,.0f}".format(xgb_metricas.rmse) }}</span></span>
+    {% endif %}
+    <span style="color:#92400e;font-size:0.78rem;">Métricas globales del modelo — no por ítem.</span>
+  </div>
+  {% endif %}
+
+  <!-- Barra de resumen -->
+  {% set solo_items = resultados | selectattr('tipo', 'equalto', 'item') | list %}
+  {% set con_pu    = solo_items  | selectattr('pu_estimado') | list %}
+  {% set sin_ref   = solo_items  | selectattr('error') | list %}
+  <div class="summary">
+    <div class="stat">
+      <div class="stat-val">{{ solo_items | length }}</div>
+      <div class="stat-lbl">Ítems procesados</div>
+    </div>
+    <div class="stat">
+      <div class="stat-val" style="color:#15803d;">{{ con_pu | length }}</div>
+      <div class="stat-lbl">Con P.U. estimado</div>
+    </div>
+    <div class="stat">
+      <div class="stat-val" style="color:#dc2626;">{{ sin_ref | length }}</div>
+      <div class="stat-lbl">Sin referencias</div>
+    </div>
+    {% if con_pu %}
+    <div class="stat">
+      <div class="stat-val" style="font-size:1.1rem;">
+        $ {{ "{:,.0f}".format(con_pu | map(attribute='pu_estimado') | sum) }}
+      </div>
+      <div class="stat-lbl">Total estimado (IPC ajustado)</div>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Tabla de resultados -->
+  <div class="card">
+    <div class="tbl-wrap">
+      <table class="main">
+        <thead>
+          <tr>
+            <th>Ítem</th>
+            <th>Descripción</th>
+            <th>Unidad</th>
+            <th>Modelo</th>
+            <th>P.U. Estimado</th>
+            <th>Margen (σ)</th>
+            <th>MAPE</th>
+            <th>R²</th>
+            <th>MAE</th>
+            <th>RMSE</th>
+            <th>Estado</th>
+            <th>Refs</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in resultados %}
+          {% set rid = loop.index %}
+
+          {% if r.tipo == 'titulo' %}
+          <tr class="titulo-row">
+            <td class="titulo-code">{{ r.item }}</td>
+            <td colspan="12" class="titulo-desc">{{ r.descripcion }}</td>
+          </tr>
+
+          {% else %}
+          {% set es_xgb = r.modelo_usado and r.modelo_usado.startswith('xgboost') %}
+          {% set met = r.metricas_validacion %}
+
+          <tr class="{% if r.error %}no-ref{% endif %}">
+            <td class="num">{{ r.item or '—' }}</td>
+            <td style="max-width:240px;line-height:1.35;">
+              {{ r.descripcion or r.nombre }}
+              {% if r.exact_match %}<span class="exact-badge">exacto</span>{% endif %}
+            </td>
+            <td><span class="unit-badge">{{ r.unidad or '—' }}</span></td>
+
+            <!-- Modelo usado -->
+            <td>
+              {% if es_xgb %}
+                <span class="modelo-badge xgb">XGBoost</span>
+              {% else %}
+                <span class="modelo-badge gauss">Gaussiano</span>
+              {% endif %}
+            </td>
+
+            <!-- P.U. estimado (siempre en valores ajustados a IPC actual) -->
+            <td class="pu">
+              {% if r.pu_estimado %}
+                $ {{ "{:,.0f}".format(r.pu_estimado) }}
+              {% else %}<span class="na">—</span>{% endif %}
+            </td>
+
+            <!-- Margen σ (solo Gaussiano) -->
+            <td class="sigma">
+              {% if not es_xgb and r.margen_error is not none and r.pu_estimado %}
+                ± ${{ "{:,.0f}".format(r.margen_error) }}
+              {% else %}<span class="na">—</span>{% endif %}
+            </td>
+
+            <!-- MAPE -->
+            <td>
+              {% if es_xgb %}
+                {# XGBoost: métricas globales, no por ítem #}
+                {% if xgb_metricas and xgb_metricas.mape_pct is not none %}
+                  {% set mp = xgb_metricas.mape_pct %}
+                  <span class="mape {% if mp < 15 %}good{% elif mp < 35 %}warn{% else %}bad{% endif %}">
+                    {{ "%.1f"|format(mp) }}%*
+                  </span>
+                {% else %}<span class="na">—</span>{% endif %}
+              {% elif met %}
+                {% set mp = met.mape_pct %}
+                <span class="mape {% if mp < 15 %}good{% elif mp < 35 %}warn{% else %}bad{% endif %}">
+                  {{ "%.1f"|format(mp) }}%
+                </span>
+              {% else %}<span class="na">—</span>{% endif %}
+            </td>
+
+            <!-- R² -->
+            <td>
+              {% if es_xgb %}
+                {% if xgb_metricas and xgb_metricas.r2 is not none %}
+                  {% set rv = xgb_metricas.r2 %}
+                  <span class="{% if rv >= 0.8 %}good{% elif rv >= 0.5 %}warn{% else %}bad{% endif %}">
+                    {{ "%.3f"|format(rv) }}*
+                  </span>
+                {% else %}<span class="na">—</span>{% endif %}
+              {% elif met and met.r2 is not none %}
+                {% set rv = met.r2 %}
+                <span class="{% if rv >= 0.8 %}good{% elif rv >= 0.5 %}warn{% else %}bad{% endif %}">
+                  {{ "%.3f"|format(rv) }}
+                </span>
+              {% else %}<span class="na">—</span>{% endif %}
+            </td>
+
+            <!-- MAE -->
+            <td>
+              {% if es_xgb %}
+                {% if xgb_metricas and xgb_metricas.mae is not none %}
+                  ${{ "{:,.0f}".format(xgb_metricas.mae) }}*
+                {% else %}<span class="na">—</span>{% endif %}
+              {% elif met %}
+                ${{ "{:,.0f}".format(met.mae) }}
+              {% else %}<span class="na">—</span>{% endif %}
+            </td>
+
+            <!-- RMSE -->
+            <td>
+              {% if es_xgb %}
+                {% if xgb_metricas and xgb_metricas.rmse is not none %}
+                  ${{ "{:,.0f}".format(xgb_metricas.rmse) }}*
+                {% else %}<span class="na">—</span>{% endif %}
+              {% elif met %}
+                ${{ "{:,.0f}".format(met.rmse) }}
+              {% else %}<span class="na">—</span>{% endif %}
+            </td>
+
+            <!-- Estado -->
+            <td style="white-space:nowrap;">
+              {% if r.exact_match %}
+                <span class="status-badge ok">Exacto</span>
+              {% elif r.pu_estimado and not r.fallback_used %}
+                <span class="status-badge ok">Con unidad</span>
+              {% elif r.pu_estimado and r.fallback_used %}
+                <span class="status-badge warn">Sin filtro u.</span>
+              {% elif r.error %}
+                <span class="status-badge err" title="{{ r.error }}">Sin datos</span>
+              {% else %}
+                <span class="na">—</span>
+              {% endif %}
+            </td>
+
+            <!-- N refs -->
+            <td class="n-refs">
+              {% if r.items_referencia %}
+                <strong>{{ r.items_referencia | length }}</strong>
+              {% else %}
+                <span class="na">0</span>
+              {% endif %}
+            </td>
+
+            <!-- Toggle refs -->
+            <td>
+              {% if r.items_referencia %}
+              <button class="toggle-btn" onclick="toggleRefs({{ rid }})">refs ▾</button>
+              {% elif r.error %}
+              <span class="na" title="{{ r.error }}">—</span>
+              {% endif %}
+            </td>
+          </tr>
+
+          <!-- Fila oculta de referencias con precios nominales y ajustados -->
+          {% if r.items_referencia %}
+          <tr class="refs-row" id="refs-{{ rid }}">
+            <td colspan="13">
+              <strong style="font-size:0.8rem;color:#5b21b6;">
+                Referencias ({{ r.items_referencia | length }}) — unidad: {{ r.unidad }}
+                {% if r.descartados_unidad %} · {{ r.descartados_unidad }} descartados por unidad{% endif %}
+              </strong>
+              <table class="refs">
+                <thead>
+                  <tr>
+                    <th>Licitación</th>
+                    <th>Ítem</th>
+                    <th>Descripción</th>
+                    <th>Unidad</th>
+                    <th>P.U. Nominal</th>
+                    <th>Factor IPC</th>
+                    <th>P.U. Ajustado</th>
+                    <th>Score</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for ref in r.items_referencia %}
+                  <tr>
+                    <td>{{ ref.licitacion }}</td>
+                    <td style="white-space:nowrap;">{{ ref.item or '—' }}</td>
+                    <td style="max-width:260px;">{{ ref.descripcion or ref.text }}</td>
+                    <td>{{ ref.unidad or '—' }}</td>
+                    <td style="color:#64748b;white-space:nowrap;">
+                      ${{ "{:,.0f}".format(ref.precio_unitario) }}
+                    </td>
+                    <td>
+                      {% if ref.factor_ipc is defined and ref.factor_ipc != 1.0 %}
+                        <span class="ipc-pill">×{{ "%.3f"|format(ref.factor_ipc) }}</span>
+                      {% else %}
+                        <span class="na">1×</span>
+                      {% endif %}
+                    </td>
+                    <td style="font-weight:bold;color:#15803d;white-space:nowrap;">
+                      {% if ref.precio_ajustado is defined %}
+                        ${{ "{:,.0f}".format(ref.precio_ajustado) }}
+                      {% else %}
+                        ${{ "{:,.0f}".format(ref.precio_unitario) }}
+                      {% endif %}
+                    </td>
+                    <td><span class="score-pill">{{ "%.3f"|format(ref.score) }}</span></td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+              {% if xgb_activo %}
+              <p style="font-size:0.75rem;color:#92400e;margin-top:0.4rem;">
+                * Las métricas marcadas con asterisco son globales del modelo XGBoost ({{ xgb_cv_tipo }}),
+                no calculadas por ítem individualmente.
+              </p>
+              {% endif %}
+            </td>
+          </tr>
+          {% endif %}
+          {% endif %}
+
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {% endif %}
+
+  <script>
+    function toggleRefs(id) {
+      const row = document.getElementById('refs-' + id);
+      const btn = event.target;
+      if (row.classList.contains('open')) {
+        row.classList.remove('open');
+        btn.textContent = 'refs ▾';
+      } else {
+        row.classList.add('open');
+        btn.textContent = 'ocultar ▴';
+      }
+    }
+  </script>
+
+</body>
+</html>
