@@ -226,33 +226,35 @@
   </div>
   {% endif %}
 
-  <!-- Banner: métricas globales XGBoost (solo si está activo) -->
+  <!-- Banner: métricas XGBoost (promedio ponderado de todos los clusters) -->
   {% if xgb_activo and xgb_metricas %}
   <div class="xgb-banner">
-    <span><span class="lbl">Modelo activo:</span>
-      <span class="val">XGBoost</span>
+    <span><span class="lbl">XGBoost activo:</span>
+      <span class="val">{{ xgb_metricas.n_clusters or '—' }} clusters</span>
       <span class="cv-tag">{{ xgb_cv_tipo }}</span></span>
     {% if xgb_metricas.mape_pct is not none %}
-    <span><span class="lbl">MAPE:</span>
+    <span><span class="lbl">MAPE avg:</span>
       <span class="val {% if xgb_metricas.mape_pct < 15 %}good{% elif xgb_metricas.mape_pct < 35 %}warn{% else %}bad{% endif %}">
         {{ "%.1f"|format(xgb_metricas.mape_pct) }}%
       </span></span>
     {% endif %}
     {% if xgb_metricas.r2 is not none %}
-    <span><span class="lbl">R²:</span>
+    <span><span class="lbl">R² avg:</span>
       <span class="val {% if xgb_metricas.r2 >= 0.8 %}good{% elif xgb_metricas.r2 >= 0.5 %}warn{% else %}bad{% endif %}">
         {{ "%.3f"|format(xgb_metricas.r2) }}
       </span></span>
     {% endif %}
+    {% if xgb_metricas.f1 is defined and xgb_metricas.f1 is not none %}
+    <span><span class="lbl">F1 avg:</span>
+      <span class="val {% if xgb_metricas.f1 >= 0.7 %}good{% elif xgb_metricas.f1 >= 0.5 %}warn{% else %}bad{% endif %}">
+        {{ "%.3f"|format(xgb_metricas.f1) }}
+      </span></span>
+    {% endif %}
     {% if xgb_metricas.mae is not none %}
-    <span><span class="lbl">MAE:</span>
+    <span><span class="lbl">MAE avg:</span>
       <span class="val">${{ "{:,.0f}".format(xgb_metricas.mae) }}</span></span>
     {% endif %}
-    {% if xgb_metricas.rmse is not none %}
-    <span><span class="lbl">RMSE:</span>
-      <span class="val">${{ "{:,.0f}".format(xgb_metricas.rmse) }}</span></span>
-    {% endif %}
-    <span style="color:#92400e;font-size:0.78rem;">Métricas globales del modelo — no por ítem.</span>
+    <span style="color:#92400e;font-size:0.78rem;">Promedio ponderado de todos los clusters K-Means.</span>
   </div>
   {% endif %}
 
@@ -297,6 +299,7 @@
             <th>Margen (σ)</th>
             <th>MAPE</th>
             <th>R²</th>
+            <th>F1</th>
             <th>MAE</th>
             <th>RMSE</th>
             <th>Estado</th>
@@ -311,7 +314,7 @@
           {% if r.tipo == 'titulo' %}
           <tr class="titulo-row">
             <td class="titulo-code">{{ r.item }}</td>
-            <td colspan="12" class="titulo-desc">{{ r.descripcion }}</td>
+            <td colspan="13" class="titulo-desc">{{ r.descripcion }}</td>
           </tr>
 
           {% else %}
@@ -349,17 +352,9 @@
               {% else %}<span class="na">—</span>{% endif %}
             </td>
 
-            <!-- MAPE -->
+            <!-- MAPE (por cluster para XGBoost, por LOO para Gaussiano) -->
             <td>
-              {% if es_xgb %}
-                {# XGBoost: métricas globales, no por ítem #}
-                {% if xgb_metricas and xgb_metricas.mape_pct is not none %}
-                  {% set mp = xgb_metricas.mape_pct %}
-                  <span class="mape {% if mp < 15 %}good{% elif mp < 35 %}warn{% else %}bad{% endif %}">
-                    {{ "%.1f"|format(mp) }}%*
-                  </span>
-                {% else %}<span class="na">—</span>{% endif %}
-              {% elif met %}
+              {% if met and met.mape_pct is not none %}
                 {% set mp = met.mape_pct %}
                 <span class="mape {% if mp < 15 %}good{% elif mp < 35 %}warn{% else %}bad{% endif %}">
                   {{ "%.1f"|format(mp) }}%
@@ -367,16 +362,9 @@
               {% else %}<span class="na">—</span>{% endif %}
             </td>
 
-            <!-- R² -->
+            <!-- R² por cluster -->
             <td>
-              {% if es_xgb %}
-                {% if xgb_metricas and xgb_metricas.r2 is not none %}
-                  {% set rv = xgb_metricas.r2 %}
-                  <span class="{% if rv >= 0.8 %}good{% elif rv >= 0.5 %}warn{% else %}bad{% endif %}">
-                    {{ "%.3f"|format(rv) }}*
-                  </span>
-                {% else %}<span class="na">—</span>{% endif %}
-              {% elif met and met.r2 is not none %}
+              {% if met and met.r2 is not none %}
                 {% set rv = met.r2 %}
                 <span class="{% if rv >= 0.8 %}good{% elif rv >= 0.5 %}warn{% else %}bad{% endif %}">
                   {{ "%.3f"|format(rv) }}
@@ -384,24 +372,26 @@
               {% else %}<span class="na">—</span>{% endif %}
             </td>
 
-            <!-- MAE -->
+            <!-- F1 por cluster (solo XGBoost) -->
             <td>
-              {% if es_xgb %}
-                {% if xgb_metricas and xgb_metricas.mae is not none %}
-                  ${{ "{:,.0f}".format(xgb_metricas.mae) }}*
-                {% else %}<span class="na">—</span>{% endif %}
-              {% elif met %}
+              {% if met and met.f1 is defined and met.f1 is not none %}
+                {% set fv = met.f1 %}
+                <span class="{% if fv >= 0.7 %}good{% elif fv >= 0.5 %}warn{% else %}bad{% endif %}">
+                  {{ "%.3f"|format(fv) }}
+                </span>
+              {% else %}<span class="na">—</span>{% endif %}
+            </td>
+
+            <!-- MAE por cluster -->
+            <td>
+              {% if met and met.mae is not none %}
                 ${{ "{:,.0f}".format(met.mae) }}
               {% else %}<span class="na">—</span>{% endif %}
             </td>
 
-            <!-- RMSE -->
+            <!-- RMSE por cluster -->
             <td>
-              {% if es_xgb %}
-                {% if xgb_metricas and xgb_metricas.rmse is not none %}
-                  ${{ "{:,.0f}".format(xgb_metricas.rmse) }}*
-                {% else %}<span class="na">—</span>{% endif %}
-              {% elif met %}
+              {% if met and met.rmse is not none %}
                 ${{ "{:,.0f}".format(met.rmse) }}
               {% else %}<span class="na">—</span>{% endif %}
             </td>
@@ -443,7 +433,7 @@
           <!-- Fila oculta de referencias con precios nominales y ajustados -->
           {% if r.items_referencia %}
           <tr class="refs-row" id="refs-{{ rid }}">
-            <td colspan="13">
+            <td colspan="14">
               <strong style="font-size:0.8rem;color:#5b21b6;">
                 Referencias ({{ r.items_referencia | length }}) — unidad: {{ r.unidad }}
                 {% if r.descartados_unidad %} · {{ r.descartados_unidad }} descartados por unidad{% endif %}
@@ -490,12 +480,6 @@
                   {% endfor %}
                 </tbody>
               </table>
-              {% if xgb_activo %}
-              <p style="font-size:0.75rem;color:#92400e;margin-top:0.4rem;">
-                * Las métricas marcadas con asterisco son globales del modelo XGBoost ({{ xgb_cv_tipo }}),
-                no calculadas por ítem individualmente.
-              </p>
-              {% endif %}
             </td>
           </tr>
           {% endif %}
