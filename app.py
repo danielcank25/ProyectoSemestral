@@ -272,7 +272,7 @@ def valorizar():
                                     fuente_tipo = "xgboost_fallback" if sin_refs else "xgboost_forzado"
                                     val["pu_estimado"]         = pu_xgb
                                     val["modelo_usado"]        = f"{fuente_tipo}|{pred.get('clave_modelo', '?')}"
-                                    val["metricas_validacion"] = None
+                                    val["metricas_validacion"] = pred.get("metricas_cluster")
                                     val["metricas_xgb_global"] = xgb_metricas
                                     val["xgb_cv_tipo"]         = xgb_cv_tipo
                                     val["margen_error"]        = None
