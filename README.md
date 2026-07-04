@@ -7,3 +7,5 @@ Los requisitos de software y las instrucciones para instalar dependencias: Utili
 Instrucciones claras para ejecutar el proyecto y reproducir (al menos parte de) los experimentos: hay que tener todo lo de la data, que son los archivos del
 XGboost ya preentrenado, y el index igual, luego correr el App.py, y abrir el link, y ir a la parte de itemizado, ahi se podra estimar
 los precios unitarios.
+
+Se subira un excel, para probar se llamara ITEMIZADO.xlsx y el pdf puede ser cualquiera debido a que no se esta aplicando la busqueda de contexto de bases.
