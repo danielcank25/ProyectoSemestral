@@ -26,7 +26,7 @@ import pandas as pd
 import xgboost as xgb
 from sklearn.base import clone
 from sklearn.cluster import KMeans
-from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score, f1_score
 from sklearn.model_selection import KFold
 
 # Ruta del pkl relativa a este módulo → data/xgb_model.pkl
@@ -148,7 +148,18 @@ def _evaluar(y_true: np.ndarray, y_pred: np.ndarray) -> dict:
     if len(y_true) > 1:
         r2v = float(r2_score(y_true, y_pred))
         r2  = None if (r2v != r2v) else r2v
-    return {'mae': mae, 'rmse': rmse, 'mape_pct': mape, 'r2': r2}
+    # F1 ponderado: discretiza real y pred en 3 bins (bajo/medio/alto) por cuantiles del real
+    f1: Optional[float] = None
+    if len(y_true) >= 6:
+        try:
+            q1, q2 = np.percentile(y_true, [33, 67])
+            if q1 < q2:
+                bins_t = np.digitize(y_true, [q1, q2])
+                bins_p = np.digitize(y_pred, [q1, q2])
+                f1 = float(f1_score(bins_t, bins_p, average='weighted', zero_division=0))
+        except Exception:
+            pass
+    return {'mae': mae, 'rmse': rmse, 'mape_pct': mape, 'r2': r2, 'f1': f1}
 
 
 # ── Modelo ──────────────────────────────────────────────────────────────────────
@@ -246,9 +257,6 @@ class XGBoostValuationModel:
             .map(GRUPO_UNIDAD).fillna(GRUPO_DEFAULT)
         )
 
-        all_y_true: list[float] = []
-        all_y_oof:  list[float] = []
-
         for grupo_u, df_u in df.groupby('grupo_unidad'):
             df_u = df_u.copy()
 
@@ -328,8 +336,6 @@ class XGBoostValuationModel:
                         y_oof[va] = mf.predict(X[va])
                     metricas = _evaluar(y_raw, np.expm1(y_oof))
                     cv_label = f'{cv_folds}-fold'
-                    all_y_true.extend(y_raw.tolist())
-                    all_y_oof.extend(np.expm1(y_oof).tolist())
                 else:
                     # NUEVO: Agregamos sample_weight=w
                     modelo.fit(X, y, sample_weight=w)
@@ -356,10 +362,22 @@ class XGBoostValuationModel:
         self.is_fitted = True
         self.cv_tipo   = f"{cv_folds}-fold CV jerárquico (unidad × cluster)"
 
-        if all_y_true:
-            self.metricas_globales = _evaluar(
-                np.array(all_y_true), np.array(all_y_oof)
-            )
+        # Métricas globales — promedio ponderado de todos los clusters entrenados
+        cluster_mets = [(m.get('n', 0), m) for m in self.metricas_por_grupo.values()]
+
+        def _wavg(key: str) -> Optional[float]:
+            vals = [(n, m[key]) for n, m in cluster_mets if m.get(key) is not None]
+            tot  = sum(n for n, _ in vals)
+            return float(sum(n * v for n, v in vals) / tot) if tot > 0 else None
+
+        self.metricas_globales = {
+            'r2':         _wavg('r2'),
+            'f1':         _wavg('f1'),
+            'mae':        _wavg('mae'),
+            'rmse':       _wavg('rmse'),
+            'mape_pct':   _wavg('mape_pct'),
+            'n_clusters': len(cluster_mets),
+        }
 
         self._log_resumen()
         return self
@@ -405,6 +423,7 @@ class XGBoostValuationModel:
                 subcat = 'otros_0'
 
         clave = f"{grupo_u}_{subcat}"
+        metricas_cluster = self.metricas_por_grupo.get(clave)
 
         def _predict_xgb(clave_: str) -> Optional[float]:
             if clave_ not in self.modelos:
@@ -418,14 +437,16 @@ class XGBoostValuationModel:
         if pu is not None:
             return {'pu_estimado': pu, 'total_estimado': pu * qty,
                     'grupo_unidad': grupo_u, 'sub_cluster': subcat,
-                    'clave_modelo': clave, 'fuente': 'xgboost'}
+                    'clave_modelo': clave, 'fuente': 'xgboost',
+                    'metricas_cluster': metricas_cluster}
 
         # Mediana del sub_cluster exacto
         if clave in self.stats and self.stats[clave].get('tipo') == 'mediana':
             pu = self.stats[clave]['valor']
             return {'pu_estimado': pu, 'total_estimado': pu * qty,
                     'grupo_unidad': grupo_u, 'sub_cluster': subcat,
-                    'clave_modelo': clave, 'fuente': 'mediana_subcluster'}
+                    'clave_modelo': clave, 'fuente': 'mediana_subcluster',
+                    'metricas_cluster': None}
 
         # Mediana del grupo_unidad completo
         vals = [
@@ -436,7 +457,8 @@ class XGBoostValuationModel:
         pu = float(np.median(vals)) if vals else 0.0
         return {'pu_estimado': pu or None, 'total_estimado': (pu * qty) if pu else None,
                 'grupo_unidad': grupo_u, 'sub_cluster': subcat,
-                'clave_modelo': clave, 'fuente': 'mediana_grupo'}
+                'clave_modelo': clave, 'fuente': 'mediana_grupo',
+                'metricas_cluster': None}
 
     # ── Logging ────────────────────────────────────────────────────────────────
 
@@ -444,12 +466,14 @@ class XGBoostValuationModel:
         n_xgb = sum(1 for s in self.stats.values() if s['tipo'] == 'xgboost')
         n_med = sum(1 for s in self.stats.values() if s['tipo'] == 'mediana')
         m_g   = self.metricas_globales or {}
-        r2_g  = f"{m_g['r2']:.2f}" if m_g.get('r2') is not None else "—"
+        r2_g  = f"{m_g['r2']:.3f}" if m_g.get('r2') is not None else "—"
+        f1_g  = f"{m_g['f1']:.3f}" if m_g.get('f1') is not None else "—"
         print(
             f"\n[XGBoost] ACTIVO ✓ — device={self.device} — "
-            f"{n_xgb} claves XGBoost + {n_med} medianas\n"
-            f"  Global: MAE=${m_g.get('mae', 0):,.0f}  "
-            f"MAPE={m_g.get('mape_pct', 0):.1f}%  R²={r2_g}\n"
+            f"{n_xgb} claves XGBoost + {n_med} medianas  "
+            f"({m_g.get('n_clusters', 0)} clusters)\n"
+            f"  Promedio ponderado — MAE=${m_g.get('mae', 0):,.0f}  "
+            f"MAPE={m_g.get('mape_pct', 0):.1f}%  R²={r2_g}  F1={f1_g}\n"
         )
 
         # Agrupar por grupo_u (guardado en stats)
@@ -464,11 +488,12 @@ class XGBoostValuationModel:
                 if s['tipo'] == 'mediana':
                     print(f"    {clave:<30} (n={s['n']:>3}, mediana=${s['valor']:,.0f})")
                 else:
-                    r2_s = f"{s.get('r2', 0):.2f}" if s.get('r2') is not None else "—"
+                    r2_s = f"{s.get('r2', 0):.3f}" if s.get('r2') is not None else "—"
+                    f1_s = f"{s.get('f1', 0):.3f}" if s.get('f1') is not None else "—"
                     print(
                         f"    {clave:<30} (n={s['n']:>3}, {s.get('cv', '')}) "
                         f"MAE=${s.get('mae', 0):,.0f}  "
-                        f"MAPE={s.get('mape_pct', 0):.1f}%  R²={r2_s}"
+                        f"MAPE={s.get('mape_pct', 0):.1f}%  R²={r2_s}  F1={f1_s}"
                     )
                 if ejems:
                     print(f"          ↳ {ejems}")
